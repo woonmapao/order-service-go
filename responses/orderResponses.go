@@ -15,6 +15,16 @@ func CreateErrorResponse(errors []string) gin.H {
 	}
 }
 
+func CreateSuccessResponseForSingleOrder(order models.Order) gin.H {
+	return gin.H{
+		"status":  "success",
+		"message": "Order retrieved successfully",
+		"data": gin.H{
+			"order": order,
+		},
+	}
+}
+
 func CreateSuccessResponseForMultipleOrders(orders []models.Order) gin.H {
 	return gin.H{
 		"status":  "success",
