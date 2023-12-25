@@ -8,6 +8,7 @@ import (
 	"github.com/woonmapao/order-service-go/initializer"
 	"github.com/woonmapao/order-service-go/models"
 	"github.com/woonmapao/order-service-go/responses"
+	"github.com/woonmapao/order-service-go/validations"
 )
 
 func GetAllOrders(c *gin.Context) {
@@ -81,37 +82,46 @@ func GetOrderByID(c *gin.Context) {
 
 func CreateOrder(c *gin.Context) {
 	// Extract order data from the request body
-	var orderData models.Order
-	err := c.ShouldBindJSON(&orderData)
+	var body models.Order
+	err := c.ShouldBindJSON(&body)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+		c.JSON(http.StatusBadRequest,
+			responses.CreateErrorResponse([]string{
+				"Invalid request format",
+			}))
 		return
 	}
 
-	// Validate the input data
-	err = validators.ValidateOrderData(orderData)
+	// Validate the order data
+	err = validations.ValidateOrderData(body)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+		c.JSON(http.StatusBadRequest,
+			responses.CreateErrorResponse([]string{
+				err.Error(),
+			}))
 		return
 	}
 
 	// Create a new order in the database
-	err = initializer.DB.Create(&orderData).Error
+	order := models.Order{
+		UserID:      body.UserID,
+		OrderDate:   body.OrderDate,
+		TotalAmount: body.TotalAmount,
+		Status:      body.Status,
+	}
+	err = initializer.DB.Create(&order).Error
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to create order",
-		})
+		c.JSON(http.StatusInternalServerError,
+			responses.CreateErrorResponse([]string{
+				"Failed to create order",
+			}))
 		return
 	}
 
-	// Return a JSON response with the newly created order
-	c.JSON(http.StatusCreated, gin.H{
-		"order": orderData,
-	})
+	// Return success response
+	c.JSON(http.StatusOK,
+		responses.CreateSuccessResponseForSingleOrder(order),
+	)
 }
 
 // UpdateOrder handles the update of an existing order
