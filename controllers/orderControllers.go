@@ -203,20 +203,47 @@ func DeleteOrder(c *gin.Context) {
 	// Extract order ID from the request parameters
 	orderID := c.Param("id")
 
-	// Delete the order from the database
-	err := initializer.DB.Delete(&models.Order{}, orderID).Error
+	// Convert order ID to integer (validations)
+	id, err := strconv.Atoi(orderID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to delete order",
-		})
+		c.JSON(http.StatusBadRequest,
+			responses.CreateErrorResponse([]string{
+				"Invalid order ID",
+			}))
 		return
 	}
 
-	// Return a JSON response indicating success
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Order deleted successfully",
-	})
+	// Check if the order with the given ID exists
+	var order models.Order
+	err = initializer.DB.First(&order, id).Error
+	if err != nil {
+		c.JSON(http.StatusInternalServerError,
+			responses.CreateErrorResponse([]string{
+				"Failed to fetch order",
+			}))
+		return
+	}
+	if order == (models.Order{}) {
+		c.JSON(http.StatusNotFound,
+			responses.CreateErrorResponse([]string{
+				"Order not found",
+			}))
+		return
+	}
+
+	// Delete the order
+	err = initializer.DB.Delete(&order).Error
+	if err != nil {
+		c.JSON(http.StatusInternalServerError,
+			responses.CreateErrorResponse([]string{
+				"Failed to delete order",
+			}))
+		return
+	}
+
+	// Return success response
+	c.JSON(http.StatusOK,
+		responses.CreateSuccessResponse(nil))
 }
 
 // GetOrderDetails fetches all details (products) associated with a specific order
