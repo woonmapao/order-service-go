@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/woonmapao/order-service-go/initializer"
 	"github.com/woonmapao/order-service-go/models"
+	"github.com/woonmapao/order-service-go/responses"
 )
 
 func GetAllOrders(c *gin.Context) {
@@ -15,16 +16,26 @@ func GetAllOrders(c *gin.Context) {
 	var orders []models.Order
 	err := initializer.DB.Find(&orders).Error
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to fetch orders",
-		})
+		c.JSON(http.StatusInternalServerError,
+			responses.CreateErrorResponse([]string{
+				"Failed to fetch orders",
+			}))
+		return
+	}
+
+	// Check if no orders were found
+	if len(orders) == 0 {
+		c.JSON(http.StatusNotFound,
+			responses.CreateErrorResponse([]string{
+				"No orders found",
+			}))
 		return
 	}
 
 	// Return a JSON response with the list of orders
-	c.JSON(http.StatusOK, gin.H{
-		"orders": orders,
-	})
+	c.JSON(http.StatusOK,
+		responses.CreateSuccessResponseForMultipleOrders(orders),
+	)
 }
 
 func GetOrderByID(c *gin.Context) {
