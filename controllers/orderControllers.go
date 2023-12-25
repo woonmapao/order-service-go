@@ -129,42 +129,73 @@ func UpdateOrder(c *gin.Context) {
 	// Extract order ID from the request parameters
 	orderID := c.Param("id")
 
+	// Convert order ID to integer (validations)
+	id, err := strconv.Atoi(orderID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest,
+			responses.CreateErrorResponse([]string{"Invalid order ID"}))
+		return
+	}
+
 	// Extract updated order data from the request body
-	var updatedOrderData models.Order
-	err := c.ShouldBindJSON(&updatedOrderData)
+	var updateData models.Order
+	err = c.ShouldBindJSON(&updateData)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+		c.JSON(http.StatusBadRequest,
+			responses.CreateErrorResponse([]string{
+				"Invalid request format",
+			}))
 		return
 	}
 
-	// Validate the input data
-	err = validators.ValidateOrderData(updatedOrderData)
+	// Validate order data
+	err = validations.ValidateOrderData(updateData)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+		c.JSON(http.StatusBadRequest,
+			responses.CreateErrorResponse([]string{
+				err.Error(),
+			}))
 		return
 	}
 
-	// Get the existing order from the database
-	var existingOrder models.Order
-	err = initializer.DB.First(&existingOrder, orderID).Error
+	// Check if the order with the given ID exists
+	var order models.Order
+	err = initializer.DB.First(&order, id).Error
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "Order not found",
-		})
+		c.JSON(http.StatusInternalServerError,
+			responses.CreateErrorResponse([]string{
+				"Failed to fetch order",
+			}))
+		return
+	}
+	if order == (models.Order{}) {
+		c.JSON(http.StatusNotFound,
+			responses.CreateErrorResponse([]string{
+				"Order not found",
+			}))
 		return
 	}
 
-	// Update the order in the database
-	initializer.DB.Model(&existingOrder).Updates(updatedOrderData)
+	// Update order fields
+	order.UserID = updateData.UserID
+	order.OrderDate = updateData.OrderDate
+	order.TotalAmount = updateData.TotalAmount
+	order.Status = updateData.Status
 
-	// Return a JSON response with the updated order
-	c.JSON(http.StatusOK, gin.H{
-		"updated_order": existingOrder,
-	})
+	// Save the updated order to the database
+	err = initializer.DB.Save(&order).Error
+	if err != nil {
+		c.JSON(http.StatusInternalServerError,
+			responses.CreateErrorResponse([]string{
+				"Failed to update order",
+			}))
+		return
+	}
+
+	/// Return success response
+	c.JSON(http.StatusOK,
+		responses.CreateSuccessResponseForSingleOrder(order),
+	)
 }
 
 // DeleteOrder deletes an order based on its ID
