@@ -8,6 +8,7 @@ import (
 	"github.com/woonmapao/order-service-go/initializer"
 	"github.com/woonmapao/order-service-go/models"
 	"github.com/woonmapao/order-service-go/responses"
+	"github.com/woonmapao/order-service-go/services"
 	"github.com/woonmapao/order-service-go/validations"
 )
 
@@ -246,23 +247,43 @@ func DeleteOrder(c *gin.Context) {
 		responses.CreateSuccessResponse(nil))
 }
 
-// GetOrderDetails fetches all details (products) associated with a specific order
+// GetOrderDetails from OrderID
 func GetOrderDetails(c *gin.Context) {
 	// Extract order ID from the request parameters
 	orderID := c.Param("id")
 
-	// Query the database for details (products) associated with the order
-	var orderDetails []models.OrderDetail
-	err := initializer.DB.Where("order_id = ?", orderID).Find(&orderDetails).Error
+	// Convert order ID to integer (validations)
+	id, err := strconv.Atoi(orderID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to fetch order details",
-		})
+		c.JSON(http.StatusBadRequest,
+			responses.CreateErrorResponse([]string{"Invalid order ID"}))
 		return
 	}
 
-	// Return a JSON response with the order details
-	c.JSON(http.StatusOK, gin.H{
-		"order_details": orderDetails,
-	})
+	// Get the order from the database
+	var order models.Order
+	err = initializer.DB.First(&order, id).Error
+	if err != nil {
+		c.JSON(http.StatusInternalServerError,
+			responses.CreateErrorResponse([]string{"Failed to fetch order"}))
+		return
+	}
+	// Check if the order was found
+	if order == (models.Order{}) {
+		c.JSON(http.StatusNotFound,
+			responses.CreateErrorResponse([]string{"Order not found"}))
+		return
+	}
+
+	// Fetch order details for the order from order detail service
+	orderDetails, err := services.FetchOrderDetailsFromOrderDetailService(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError,
+			responses.CreateErrorResponse([]string{"Failed to fetch order details"}))
+		return
+	}
+
+	// Return success response with order details
+	c.JSON(http.StatusOK,
+		responses.CreateSuccessResponseForMultipleOrderDetails(orderDetails))
 }

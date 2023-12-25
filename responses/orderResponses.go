@@ -42,3 +42,25 @@ func CreateSuccessResponseForMultipleOrders(orders []models.Order) gin.H {
 		},
 	}
 }
+
+func CreateSuccessResponseForMultipleOrderDetails(orderDetails []models.OrderDetail) gin.H {
+	// Convert order details to a format suitable for the response
+	var formattedOrderDetails []gin.H
+	for _, orderDetail := range orderDetails {
+		formattedOrderDetails = append(formattedOrderDetails, gin.H{
+			"id":        orderDetail.ID,
+			"orderID":   orderDetail.OrderID,
+			"productID": orderDetail.ProductID,
+			"quantity":  orderDetail.Quantity,
+			"subtotal":  orderDetail.Subtotal,
+		})
+	}
+
+	return gin.H{
+		"status":  "success",
+		"message": "Order details retrieved successfully",
+		"data": gin.H{
+			"orderDetails": formattedOrderDetails,
+		},
+	}
+}
