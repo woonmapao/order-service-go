@@ -22,11 +22,10 @@ func GetAllOrders(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError,
 			responses.CreateErrorResponse([]string{
 				"Failed to fetch orders",
+				err.Error(),
 			}))
 		return
 	}
-
-	// Check if no orders were found
 	if len(orders) == 0 {
 		c.JSON(http.StatusNotFound,
 			responses.CreateErrorResponse([]string{
@@ -51,6 +50,7 @@ func GetOrderByID(c *gin.Context) {
 		c.JSON(http.StatusBadRequest,
 			responses.CreateErrorResponse([]string{
 				"Invalid order ID",
+				err.Error(),
 			}))
 		return
 	}
@@ -62,11 +62,10 @@ func GetOrderByID(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError,
 			responses.CreateErrorResponse([]string{
 				"Failed to fetch order",
+				err.Error(),
 			}))
 		return
 	}
-
-	// Check if the order was not found
 	if order == (models.Order{}) {
 		c.JSON(http.StatusNotFound,
 			responses.CreateErrorResponse([]string{
@@ -89,6 +88,16 @@ func CreateOrder(c *gin.Context) {
 		c.JSON(http.StatusBadRequest,
 			responses.CreateErrorResponse([]string{
 				"Invalid request format",
+				err.Error(),
+			}))
+		return
+	}
+
+	// Check for empty values
+	if body.UserID == 0 || body.OrderDate.IsZero() || body.TotalAmount == 0.0 || body.Status == "" {
+		c.JSON(http.StatusBadRequest,
+			responses.CreateErrorResponse([]string{
+				"UserID, OrderDate, TotalAmount, and Status are required fields",
 			}))
 		return
 	}
@@ -103,6 +112,17 @@ func CreateOrder(c *gin.Context) {
 		return
 	}
 
+	// Start a transaction
+	tx := initializer.DB.Begin()
+	if tx.Error != nil {
+		c.JSON(http.StatusInternalServerError,
+			responses.CreateErrorResponse([]string{
+				"Failed to begin transaction",
+				tx.Error.Error(),
+			}))
+		return
+	}
+
 	// Create a new order in the database
 	order := models.Order{
 		UserID:      body.UserID,
@@ -110,11 +130,24 @@ func CreateOrder(c *gin.Context) {
 		TotalAmount: body.TotalAmount,
 		Status:      body.Status,
 	}
-	err = initializer.DB.Create(&order).Error
+	err = tx.Create(&order).Error
 	if err != nil {
 		c.JSON(http.StatusInternalServerError,
 			responses.CreateErrorResponse([]string{
 				"Failed to create order",
+				err.Error(),
+			}))
+		return
+	}
+
+	// Commit the transaction and check for commit errors
+	err = tx.Commit().Error
+	if err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError,
+			responses.CreateErrorResponse([]string{
+				"Failed to commit transaction",
+				err.Error(),
 			}))
 		return
 	}
@@ -134,7 +167,10 @@ func UpdateOrder(c *gin.Context) {
 	id, err := strconv.Atoi(orderID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest,
-			responses.CreateErrorResponse([]string{"Invalid order ID"}))
+			responses.CreateErrorResponse([]string{
+				"Invalid order ID",
+				err.Error(),
+			}))
 		return
 	}
 
@@ -145,6 +181,7 @@ func UpdateOrder(c *gin.Context) {
 		c.JSON(http.StatusBadRequest,
 			responses.CreateErrorResponse([]string{
 				"Invalid request format",
+				err.Error(),
 			}))
 		return
 	}
@@ -159,13 +196,25 @@ func UpdateOrder(c *gin.Context) {
 		return
 	}
 
+	// Start a transaction
+	tx := initializer.DB.Begin()
+	if tx.Error != nil {
+		c.JSON(http.StatusInternalServerError,
+			responses.CreateErrorResponse([]string{
+				"Failed to begin transaction",
+				tx.Error.Error(),
+			}))
+		return
+	}
+
 	// Check if the order with the given ID exists
 	var order models.Order
-	err = initializer.DB.First(&order, id).Error
+	err = tx.First(&order, id).Error
 	if err != nil {
 		c.JSON(http.StatusInternalServerError,
 			responses.CreateErrorResponse([]string{
 				"Failed to fetch order",
+				err.Error(),
 			}))
 		return
 	}
@@ -177,18 +226,38 @@ func UpdateOrder(c *gin.Context) {
 		return
 	}
 
-	// Update order fields
-	order.UserID = updateData.UserID
-	order.OrderDate = updateData.OrderDate
-	order.TotalAmount = updateData.TotalAmount
-	order.Status = updateData.Status
+	// Only update the fields that are present in the request
+	if updateData.UserID != 0 {
+		order.UserID = updateData.UserID
+	}
+	if !updateData.OrderDate.IsZero() {
+		order.OrderDate = updateData.OrderDate
+	}
+	if updateData.TotalAmount != 0 {
+		order.TotalAmount = updateData.TotalAmount
+	}
+	if updateData.Status != "" {
+		order.Status = updateData.Status
+	}
 
 	// Save the updated order to the database
-	err = initializer.DB.Save(&order).Error
+	err = tx.Save(&order).Error
 	if err != nil {
 		c.JSON(http.StatusInternalServerError,
 			responses.CreateErrorResponse([]string{
 				"Failed to update order",
+				err.Error(),
+			}))
+		return
+	}
+
+	// Commit the transaction and check for commit errors
+	err = tx.Commit().Error
+	if err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError,
+			responses.CreateErrorResponse([]string{
+				"Failed to commit transaction",
 			}))
 		return
 	}
@@ -214,9 +283,20 @@ func DeleteOrder(c *gin.Context) {
 		return
 	}
 
+	// Start a transaction
+	tx := initializer.DB.Begin()
+	if tx.Error != nil {
+		c.JSON(http.StatusInternalServerError,
+			responses.CreateErrorResponse([]string{
+				"Failed to begin transaction",
+				tx.Error.Error(),
+			}))
+		return
+	}
+
 	// Check if the order with the given ID exists
 	var order models.Order
-	err = initializer.DB.First(&order, id).Error
+	err = tx.First(&order, id).Error
 	if err != nil {
 		c.JSON(http.StatusInternalServerError,
 			responses.CreateErrorResponse([]string{
@@ -233,7 +313,7 @@ func DeleteOrder(c *gin.Context) {
 	}
 
 	// Delete the order
-	err = initializer.DB.Delete(&order).Error
+	err = tx.Delete(&order).Error
 	if err != nil {
 		c.JSON(http.StatusInternalServerError,
 			responses.CreateErrorResponse([]string{
@@ -242,9 +322,21 @@ func DeleteOrder(c *gin.Context) {
 		return
 	}
 
+	// Commit the transaction and check for commit errors
+	err = tx.Commit().Error
+	if err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError,
+			responses.CreateErrorResponse([]string{
+				"Failed to commit transaction",
+				err.Error(),
+			}))
+		return
+	}
+
 	// Return success response
 	c.JSON(http.StatusOK,
-		responses.CreateSuccessResponse(nil))
+		responses.CreateSuccessResponse(&order))
 }
 
 // GetOrderDetails from OrderID
@@ -256,7 +348,10 @@ func GetOrderDetails(c *gin.Context) {
 	id, err := strconv.Atoi(orderID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest,
-			responses.CreateErrorResponse([]string{"Invalid order ID"}))
+			responses.CreateErrorResponse([]string{
+				"Invalid order ID",
+				err.Error(),
+			}))
 		return
 	}
 
@@ -265,13 +360,17 @@ func GetOrderDetails(c *gin.Context) {
 	err = initializer.DB.First(&order, id).Error
 	if err != nil {
 		c.JSON(http.StatusInternalServerError,
-			responses.CreateErrorResponse([]string{"Failed to fetch order"}))
+			responses.CreateErrorResponse([]string{
+				"Failed to fetch order",
+				err.Error(),
+			}))
 		return
 	}
-	// Check if the order was found
 	if order == (models.Order{}) {
 		c.JSON(http.StatusNotFound,
-			responses.CreateErrorResponse([]string{"Order not found"}))
+			responses.CreateErrorResponse([]string{
+				"Order not found",
+			}))
 		return
 	}
 
@@ -279,7 +378,10 @@ func GetOrderDetails(c *gin.Context) {
 	orderDetails, err := services.FetchOrderDetailsFromOrderDetailService(id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError,
-			responses.CreateErrorResponse([]string{"Failed to fetch order details"}))
+			responses.CreateErrorResponse([]string{
+				"Failed to fetch order details",
+				err.Error(),
+			}))
 		return
 	}
 
