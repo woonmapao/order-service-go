@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/woonmapao/order-service-go/initializer"
+	"github.com/woonmapao/order-service-go/routes"
 )
 
 func init() {
@@ -15,6 +16,8 @@ func init() {
 func main() {
 
 	r := gin.Default()
+
+	routes.SetupOrderRoutes(r)
 
 	port := os.Getenv("PORT")
 	if port == "" {

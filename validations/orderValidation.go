@@ -8,6 +8,8 @@ import (
 	"github.com/woonmapao/order-service-go/models"
 )
 
+const userServiceURL = "http://localhost:9009/users"
+
 func ValidateOrderData(data models.Order) error {
 
 	if !userExists(data.UserID) {
@@ -19,7 +21,7 @@ func ValidateOrderData(data models.Order) error {
 
 // userExists checks if a user with the given ID exists in the database.
 func userExists(userID int) bool {
-	url := fmt.Sprintf("http://user-service/api/users/%d", userID)
+	url := fmt.Sprintf("%s/%d", userServiceURL, userID)
 
 	// Make HTTP GET request to check user existence
 	resp, err := http.Get(url)
